@@ -36,7 +36,7 @@ function ui_render_save_button(tag, enabled = true, display = true) {
     button.innerText = tag;
     button.disabled = !enabled;
     button.classList[enabled ? 'remove' : 'add']('disabled');
-    button.display = !display;
+    // Removed non-standard button.display assignment; style.display handles it correctly
     button.style.display = display ? '' : 'none';
 }
 
