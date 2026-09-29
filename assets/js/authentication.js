@@ -40,7 +40,7 @@ function auth_get_token() {
 }
 
 function auth_check_token() {
-    return !!auth_get_access_token();
+    return !!window.localStorage.getItem('spotify_access_token');
 }
 
 function auth_has_recently_connected() {
@@ -82,19 +82,29 @@ async function auth_connect_spotify() {
     }
 }
 
-// Intercepts the return immediately and handles token exchange before main app loads
+// Handles code exchange safely without double-triggering
 async function auth_handle_callback() {
+    // If we already have a valid token stored, clean URL params and exit immediately
+    if (auth_check_token()) {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('code')) {
+            window.history.replaceState({}, document.title, REDIRECT_URI);
+        }
+        return;
+    }
+
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
 
-    if (!code) return false; // No code, normal app load check
+    if (!code) return;
 
-    // We have a code! Hide standard UI elements temporarily if needed
     const codeVerifier = window.localStorage.getItem('code_verifier');
     if (!codeVerifier) {
-        alert("Error: Code verifier missing from storage. Please try logging in again.");
-        return false;
+        return;
     }
+
+    // Immediately remove verifier so it cannot be reused
+    window.localStorage.removeItem('code_verifier');
 
     try {
         const response = await fetch("https://accounts.spotify.com/api/token", {
@@ -117,23 +127,19 @@ async function auth_handle_callback() {
             if (data.refresh_token) {
                 window.localStorage.setItem('spotify_refresh_token', data.refresh_token);
             }
-            window.localStorage.removeItem('code_verifier');
             
-            // Clean URL and reload cleanly so token is active
+            // Clean URL and navigate cleanly to base app
             window.history.replaceState({}, document.title, REDIRECT_URI);
-            window.location.reload();
-            return true;
+            window.location.href = REDIRECT_URI;
         } else {
             alert(`Token exchange failed: ${JSON.stringify(data)}`);
-            return false;
         }
     } catch (err) {
         alert(`Network error during token exchange: ${err}`);
-        return false;
     }
 }
 
-// Run callback check immediately before DOM content settles
+// Run callback check immediately on script load
 (async function() {
     await auth_handle_callback();
 })();
