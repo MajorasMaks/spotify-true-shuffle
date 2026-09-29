@@ -51,18 +51,17 @@ function auth_get_hash(length) {
     return GENERATE_RANDOM_STRING(length || 16);
 }
 
-// Clean UI switcher that hides the login section and reveals the main app interface
+// Safe UI switcher that hides only the login/auth blocks when logged in
 function auth_parse_connection_parameters() {
     if (auth_check_token()) {
-        // Target the specific auth container class from application.css
+        // Hide elements containing the login button or landing text specifically
         document.querySelectorAll('.auth-container').forEach(el => {
             el.style.display = 'none';
         });
 
-        // Ensure main application elements/containers are visible
+        // Ensure elements related to playlist selection and controls are visible
         document.querySelectorAll('.page-select, .application-button, .label, .subtitle, #shuffle_results_container').forEach(el => {
-            const parent = el.closest('div');
-            if (parent) parent.style.display = '';
+            el.style.display = 'block';
         });
     }
 }
