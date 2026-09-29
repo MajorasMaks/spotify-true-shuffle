@@ -51,19 +51,26 @@ function auth_get_hash(length) {
     return GENERATE_RANDOM_STRING(length || 16);
 }
 
-// Universal UI switcher that forces the connect button to hide if token exists
+// Automatically transition UI from landing/login to the main app dashboard when logged in
 function auth_parse_connection_parameters() {
     if (auth_check_token()) {
-        // Hide common connect/landing wrappers
-        ['landing_page', 'connect_container', 'auth_container', 'login_section', 'connect_button'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.style.display = 'none';
+        // Find and hide landing elements/buttons
+        const connectBtn = document.getElementById('connect_button');
+        if (connectBtn) {
+            const landingWrapper = connectBtn.closest('div') || connectBtn.parentElement;
+            if (landingWrapper) landingWrapper.style.display = 'none';
+        }
+
+        // Hide any elements containing the landing greeting text
+        document.querySelectorAll('div, section').forEach(el => {
+            if (el.innerText && el.innerText.includes('Please connect your Spotify account')) {
+                el.style.display = 'none';
+            }
         });
 
-        // Show common main app wrappers
-        ['app_container', 'main_container', 'dashboard', 'app', 'shuffle_container'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.style.display = 'block';
+        // Reveal main app containers and controls
+        document.querySelectorAll('#app_container, #main_container, #shuffle_results_container, .container, .row').forEach(el => {
+            if (el) el.style.display = '';
         });
     }
 }
