@@ -29,6 +29,20 @@ const AUTH_APPLICATION_SCOPES = [
     'user-read-playback-state'
 ].join(' ');
 
+// Compatibility functions expected by main.js and user_interface.js
+function auth_get_token() {
+    return window.localStorage.getItem('spotify_access_token');
+}
+
+function auth_check_token() {
+    return !!auth_get_token();
+}
+
+function auth_get_hash(length) {
+    return GENERATE_RANDOM_STRING(length || 16);
+}
+
+// Main connect trigger called by UI event listeners
 async function auth_connect_spotify() {
     try {
         const codeVerifier = GENERATE_RANDOM_STRING(64);
@@ -38,7 +52,7 @@ async function auth_connect_spotify() {
         window.localStorage.setItem('code_verifier', codeVerifier);
 
         const callback_uri = location.origin + location.pathname;
-        const integrity = GENERATE_RANDOM_STRING(16);
+        const integrity = auth_get_hash(60);
 
         const authUrl = new URL("https://accounts.spotify.com/authorize");
         const params = {
@@ -58,13 +72,13 @@ async function auth_connect_spotify() {
     }
 }
 
+// Handle code exchange on redirect back from Spotify
 async function auth_handle_callback() {
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
 
     if (!code) return;
 
-    // Clear parameters immediately to prevent loops
     window.history.replaceState({}, document.title, location.pathname);
 
     const codeVerifier = window.localStorage.getItem('code_verifier');
