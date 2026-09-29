@@ -51,8 +51,16 @@ function auth_get_hash(length) {
     return GENERATE_RANDOM_STRING(length || 16);
 }
 
+// Called by main.js on startup to verify state and toggle UI views
 function auth_parse_connection_parameters() {
-    // Handled via auth_handle_callback
+    if (auth_check_token()) {
+        // If token exists, hide landing/connect view and show main app container
+        const landing = document.getElementById('landing_page') || document.getElementById('connect_container');
+        const app = document.getElementById('app_container') || document.getElementById('main_container');
+        
+        if (landing) landing.style.display = 'none';
+        if (app) app.style.display = 'block';
+    }
 }
 
 async function auth_connect_spotify() {
@@ -82,14 +90,14 @@ async function auth_connect_spotify() {
     }
 }
 
-// Handles code exchange safely without double-triggering
 async function auth_handle_callback() {
-    // If we already have a valid token stored, clean URL params and exit immediately
+    // If already logged in, clean URL params and let main.js handle the view
     if (auth_check_token()) {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.has('code')) {
             window.history.replaceState({}, document.title, REDIRECT_URI);
         }
+        auth_parse_connection_parameters();
         return;
     }
 
@@ -99,11 +107,8 @@ async function auth_handle_callback() {
     if (!code) return;
 
     const codeVerifier = window.localStorage.getItem('code_verifier');
-    if (!codeVerifier) {
-        return;
-    }
+    if (!codeVerifier) return;
 
-    // Immediately remove verifier so it cannot be reused
     window.localStorage.removeItem('code_verifier');
 
     try {
@@ -128,7 +133,6 @@ async function auth_handle_callback() {
                 window.localStorage.setItem('spotify_refresh_token', data.refresh_token);
             }
             
-            // Clean URL and navigate cleanly to base app
             window.history.replaceState({}, document.title, REDIRECT_URI);
             window.location.href = REDIRECT_URI;
         } else {
@@ -139,7 +143,7 @@ async function auth_handle_callback() {
     }
 }
 
-// Run callback check immediately on script load
-(async function() {
-    await auth_handle_callback();
-})();
+window.addEventListener('DOMContentLoaded', () => {
+    auth_handle_callback();
+    auth_parse_connection_parameters();
+});
