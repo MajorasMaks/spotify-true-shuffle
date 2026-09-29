@@ -51,8 +51,20 @@ function auth_get_hash(length) {
     return GENERATE_RANDOM_STRING(length || 16);
 }
 
+// Clean UI switcher that hides the login section and reveals the main app interface
 function auth_parse_connection_parameters() {
-    // Left native for main.js handling, token presence checked globally via auth_check_token
+    if (auth_check_token()) {
+        // Target the specific auth container class from application.css
+        document.querySelectorAll('.auth-container').forEach(el => {
+            el.style.display = 'none';
+        });
+
+        // Ensure main application elements/containers are visible
+        document.querySelectorAll('.page-select, .application-button, .label, .subtitle, #shuffle_results_container').forEach(el => {
+            const parent = el.closest('div');
+            if (parent) parent.style.display = '';
+        });
+    }
 }
 
 async function auth_connect_spotify() {
@@ -88,6 +100,7 @@ async function auth_handle_callback() {
         if (urlParams.has('code')) {
             window.history.replaceState({}, document.title, REDIRECT_URI);
         }
+        auth_parse_connection_parameters();
         return;
     }
 
@@ -135,4 +148,5 @@ async function auth_handle_callback() {
 
 window.addEventListener('DOMContentLoaded', () => {
     auth_handle_callback();
+    auth_parse_connection_parameters();
 });
