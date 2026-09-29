@@ -180,11 +180,11 @@ async function SpotifyAPI(token) {
             if (cache && instance._cache.tracks[LIKED_SONGS_PLAYLIST_ID])
                 return instance._cache.tracks[LIKED_SONGS_PLAYLIST_ID];
 
-            // Retrieve the liked tracks with pagination
+            // Retrieve the liked tracks with pagination (Fixed: changed _offset to cursor)
             const tracks = await instance._with_pagination({
                 limit,
                 delay,
-                _offset: offset,
+                cursor: offset,
                 request: async ({ limit, offset }) => {
                     // Retrieve the tracks for this props request
                     const tracks = await instance._api_request({
@@ -220,7 +220,7 @@ async function SpotifyAPI(token) {
         const tracks = await instance._with_pagination({
             limit,
             delay,
-            _offset: offset,
+            cursor: offset, // Fixed: changed to cursor
             request: async ({ limit, offset }) => {
                 // Retrieve the tracks for this props request
                 const tracks = await instance._api_request({
@@ -253,8 +253,6 @@ async function SpotifyAPI(token) {
 
         // Match the request's HTTP status code to one of the possible scenarios
         switch (response.status) {
-            // Spotify has changed the return code from 204 to 200?
-            // I'll keep the dual case incase they decide to revert the change.
             case 204: case 200:
                 return true;
             case 403:
