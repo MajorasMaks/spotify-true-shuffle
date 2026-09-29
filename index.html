@@ -132,6 +132,7 @@
             font-size: 13px;
             color: var(--spotify-green);
             min-height: 20px;
+            word-break: break-all;
         }
 
         .logout-link {
@@ -176,7 +177,7 @@
                 <select id="device_select">
                     <option value="">-- Click Refresh Devices --</option>
                 </select>
-                <button class="btn-secondary" onclick="refreshDevices()">🔄 Refresh / Find S23</button>
+                <button class="btn-secondary" onclick="refreshDevices()">🔄 Refresh Devices</button>
             </div>
 
             <button class="btn-primary" onclick="triggerTrueShuffle()">Start True Shuffle</button>
@@ -324,8 +325,8 @@
                 deviceSelect.innerHTML = '';
 
                 if (!devicesData.devices || devicesData.devices.length === 0) {
-                    deviceSelect.innerHTML = '<option value="">No devices found! Open Spotify on S23</option>';
-                    statusEl.textContent = "No devices found. Open the Spotify app on your S23 and play a second of any song.";
+                    deviceSelect.innerHTML = '<option value="">No devices found</option>';
+                    statusEl.textContent = "No devices found. Open Spotify on your S23 and play a song for 2 seconds.";
                     return;
                 }
 
@@ -333,7 +334,6 @@
                     const opt = document.createElement('option');
                     opt.value = d.id;
                     opt.textContent = `${d.name} (${d.type})${d.is_active ? ' [ACTIVE]' : ''}`;
-                    // Automatically select it if it matches "S23", "Galaxy", or is active
                     if (d.name.toLowerCase().includes('s23') || d.is_active) {
                         opt.selected = true;
                     }
@@ -357,13 +357,12 @@
                 return;
             }
             if (!deviceId) {
-                alert("Please select or refresh your target device.");
+                alert("Please select your target device from the dropdown.");
                 return;
             }
 
-            statusEl.textContent = "Fetching playlist tracks...";
-
             try {
+                statusEl.textContent = "Fetching playlist tracks...";
                 let tracks = [];
                 let url = `/playlists/${playlistId}/tracks?limit=100`;
                 while (url) {
@@ -383,21 +382,35 @@
                     [tracks[i], tracks[j]] = [tracks[j], tracks[i]];
                 }
 
-                statusEl.textContent = "Transferring playback to S23...";
-                await callSpotify('/me/player', 'PUT', {
-                    device_ids: [deviceId],
-                    play: false
+                statusEl.textContent = "Starting playback on target device...";
+                
+                // Single unified request bypassing the race condition
+                const res = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('spotify_access_token')}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        uris: tracks.slice(0, 50)
+                    })
                 });
 
-                statusEl.textContent = "Starting playback...";
-                await callSpotify(`/me/player/play?device_id=${deviceId}`, 'PUT', {
-                    uris: tracks.slice(0, 50)
-                });
+                if (!res.ok) {
+                    let errorMsg = `HTTP error ${res.status}`;
+                    try {
+                        const errData = await res.json();
+                        if (errData.error && errData.error.message) {
+                            errorMsg = errData.error.message;
+                        }
+                    } catch (e) {}
+                    throw new Error(errorMsg);
+                }
 
                 statusEl.textContent = "True Shuffle started successfully!";
             } catch (err) {
                 console.error(err);
-                statusEl.textContent = "Error: Open Spotify on your S23, hit play once, then try again.";
+                statusEl.textContent = "Error: " + err.message;
             }
         }
 
