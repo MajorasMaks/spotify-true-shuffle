@@ -51,19 +51,8 @@ function auth_get_hash(length) {
     return GENERATE_RANDOM_STRING(length || 16);
 }
 
-// Safe UI switcher that hides only the login/auth blocks when logged in
 function auth_parse_connection_parameters() {
-    if (auth_check_token()) {
-        // Hide elements containing the login button or landing text specifically
-        document.querySelectorAll('.auth-container').forEach(el => {
-            el.style.display = 'none';
-        });
-
-        // Ensure elements related to playlist selection and controls are visible
-        document.querySelectorAll('.page-select, .application-button, .label, .subtitle, #shuffle_results_container').forEach(el => {
-            el.style.display = 'block';
-        });
-    }
+    // Handled natively by main application scripts using auth_check_token()
 }
 
 async function auth_connect_spotify() {
@@ -99,7 +88,6 @@ async function auth_handle_callback() {
         if (urlParams.has('code')) {
             window.history.replaceState({}, document.title, REDIRECT_URI);
         }
-        auth_parse_connection_parameters();
         return;
     }
 
@@ -147,5 +135,4 @@ async function auth_handle_callback() {
 
 window.addEventListener('DOMContentLoaded', () => {
     auth_handle_callback();
-    auth_parse_connection_parameters();
 });
