@@ -32,7 +32,6 @@ const AUTH_APPLICATION_SCOPES = [
 // Exact matching redirect URI for your Spotify dashboard configuration
 const REDIRECT_URI = 'https://spotify-true-shuffle.vercel.app/';
 
-// Legacy compatibility functions required by main.js
 function auth_get_access_token() {
     return window.localStorage.getItem('spotify_access_token');
 }
@@ -53,19 +52,17 @@ function auth_get_hash(length) {
     return GENERATE_RANDOM_STRING(length || 16);
 }
 
-// Dummy handler so main.js startup check doesn't crash
 function auth_parse_connection_parameters() {
-    // Handled by auth_handle_callback via PKCE code exchange
+    // Handled via auth_handle_callback
 }
 
-// Connect trigger called by the UI button
 async function auth_connect_spotify() {
     try {
         const codeVerifier = GENERATE_RANDOM_STRING(64);
         const hashed = await SHA256(codeVerifier);
         const codeChallenge = BASE64_ENCODE(hashed);
 
-        window.sessionStorage.setItem('code_verifier', codeVerifier);
+        window.localStorage.setItem('code_verifier', codeVerifier);
         const integrity = auth_get_hash(60);
 
         const authUrl = new URL("https://accounts.spotify.com/authorize");
@@ -86,18 +83,15 @@ async function auth_connect_spotify() {
     }
 }
 
-// Handle code exchange on redirect back from Spotify
 async function auth_handle_callback() {
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
 
     if (!code) return;
 
-    window.history.replaceState({}, document.title, window.location.pathname);
-
-    const codeVerifier = window.sessionStorage.getItem('code_verifier');
+    const codeVerifier = window.localStorage.getItem('code_verifier');
     if (!codeVerifier) {
-        alert("Error: Code verifier missing from session storage.");
+        alert("Error: Code verifier missing from storage. Please try logging in again.");
         return;
     }
 
@@ -122,8 +116,11 @@ async function auth_handle_callback() {
             if (data.refresh_token) {
                 window.localStorage.setItem('spotify_refresh_token', data.refresh_token);
             }
-            window.sessionStorage.removeItem('code_verifier');
-            window.location.href = REDIRECT_URI;
+            window.localStorage.removeItem('code_verifier');
+            
+            // Clean URL and reload application state smoothly
+            window.history.replaceState({}, document.title, REDIRECT_URI);
+            window.location.reload();
         } else {
             alert(`Token exchange failed: ${JSON.stringify(data)}`);
         }
