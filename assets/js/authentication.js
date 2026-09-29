@@ -29,20 +29,33 @@ const AUTH_APPLICATION_SCOPES = [
     'user-read-playback-state'
 ].join(' ');
 
-// Compatibility functions expected by main.js and user_interface.js
-function auth_get_token() {
+// Legacy compatibility functions required by main.js
+function auth_get_access_token() {
     return window.localStorage.getItem('spotify_access_token');
 }
 
+function auth_get_token() {
+    return auth_get_access_token();
+}
+
 function auth_check_token() {
-    return !!auth_get_token();
+    return !!auth_get_access_token();
+}
+
+function auth_has_recently_connected() {
+    return !!window.localStorage.getItem('spotify_refresh_token');
 }
 
 function auth_get_hash(length) {
     return GENERATE_RANDOM_STRING(length || 16);
 }
 
-// Main connect trigger called by UI event listeners
+// Dummy handler so main.js startup check doesn't crash
+function auth_parse_connection_parameters() {
+    // Handled by auth_handle_callback via PKCE code exchange
+}
+
+// Connect trigger called by the UI button
 async function auth_connect_spotify() {
     try {
         const codeVerifier = GENERATE_RANDOM_STRING(64);
