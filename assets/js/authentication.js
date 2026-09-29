@@ -19,32 +19,38 @@ const BASE64_ENCODE = (input) => {
 };
 
 async function auth_connect_spotify() {
-    const codeVerifier = GENERATE_RANDOM_STRING(64);
-    const hashed = await SHA256(codeVerifier);
-    const codeChallenge = BASE64_ENCODE(hashed);
+    // Debug popup to instantly confirm the button handler is firing on mobile
+    alert("Connecting to Spotify...");
 
-    window.localStorage.setItem('code_verifier', codeVerifier);
+    try {
+        const codeVerifier = GENERATE_RANDOM_STRING(64);
+        const hashed = await SHA256(codeVerifier);
+        const codeChallenge = BASE64_ENCODE(hashed);
 
-    const callback_uri = location.origin + location.pathname;
-    const scopes = AUTH_APPLICATION_SCOPES;
-    const integrity = auth_get_hash(60);
+        window.localStorage.setItem('code_verifier', codeVerifier);
 
-    ui_render_connect_button('Connecting...', false);
-    log('AUTHENTICATION', `Redirecting to Spotify OAuth PKCE Page: ${callback_uri}`);
+        const callback_uri = location.origin + location.pathname;
+        const scopes = AUTH_APPLICATION_SCOPES;
+        const integrity = auth_get_hash(60);
 
-    const authUrl = new URL("https://accounts.spotify.com/authorize");
-    const params = {
-        response_type: 'code',
-        client_id: AUTH_CLIENT_ID,
-        scope: scopes,
-        code_challenge_method: 'S256',
-        code_challenge: codeChallenge,
-        redirect_uri: callback_uri,
-        state: integrity
-    };
+        log('AUTHENTICATION', `Redirecting to Spotify OAuth PKCE Page: ${callback_uri}`);
 
-    authUrl.search = new URLSearchParams(params).toString();
-    window.location.href = authUrl.toString();
+        const authUrl = new URL("https://accounts.spotify.com/authorize");
+        const params = {
+            response_type: 'code',
+            client_id: AUTH_CLIENT_ID,
+            scope: scopes,
+            code_challenge_method: 'S256',
+            code_challenge: codeChallenge,
+            redirect_uri: callback_uri,
+            state: integrity
+        };
+
+        authUrl.search = new URLSearchParams(params).toString();
+        window.location.href = authUrl.toString();
+    } catch (err) {
+        alert("Auth error: " + err);
+    }
 }
 
 // Check for authorization code on page load and exchange it for a token
@@ -64,7 +70,6 @@ async function auth_handle_callback() {
     }
 
     try {
-        ui_render_connect_button('Authenticating...', false);
         const response = await fetch("https://accounts.spotify.com/api/token", {
             method: 'POST',
             headers: {
@@ -88,12 +93,10 @@ async function auth_handle_callback() {
             log('AUTHENTICATION', 'Successfully authenticated via PKCE!');
             window.location.reload();
         } else {
-            log('AUTHENTICATION', `Token exchange failed: ${JSON.stringify(data)}`);
-            ui_render_connect_button('Connect with Spotify', true);
+            alert(`Token exchange failed: ${JSON.stringify(data)}`);
         }
     } catch (err) {
-        log('AUTHENTICATION', `Network error during token exchange: ${err}`);
-        ui_render_konnect_button('Connect with Spotify', true);
+        alert(`Network error during token exchange: ${err}`);
     }
 }
 
