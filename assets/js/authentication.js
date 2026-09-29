@@ -21,7 +21,6 @@ function auth_get_token() {
 }
 
 function auth_check_token() {
-    // If a token exists, we're good to go
     const token = window.localStorage.getItem('spotify_access_token');
     return token && token !== 'undefined' && token !== 'null';
 }
@@ -34,12 +33,12 @@ function auth_get_hash(length) {
     return '1234567890abcdef';
 }
 
-// Automatically hide any connect elements permanently and boot up the app
+// Safely clear the connect UI contents without collapsing layout wrappers
 function auth_parse_connection_parameters() {
-    // Hide the connect card container completely without breaking layout grids
     const authContainer = document.querySelector('.auth-container');
-    if (authContainer) {
-        authContainer.style.display = 'none';
+    if (authContainer && auth_check_token()) {
+        // Clear out the connect button/text cleanly without hiding the element layout
+        authContainer.innerHTML = '';
     }
 
     const token = auth_get_access_token();
@@ -61,7 +60,7 @@ function auth_parse_connection_parameters() {
     }, 100);
 }
 
-// If something forces a connect action, fall back to standard PKCE flow once
+// Fallback PKCE flow if token needs renewal or initial login
 async function auth_connect_spotify() {
     const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     const codeVerifier = Array.from(crypto.getRandomValues(new Uint8Array(64)))
