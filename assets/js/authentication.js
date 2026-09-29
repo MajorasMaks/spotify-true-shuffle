@@ -40,7 +40,8 @@ function auth_get_token() {
 }
 
 function auth_check_token() {
-    return !!window.localStorage.getItem('spotify_access_token');
+    const token = window.localStorage.getItem('spotify_access_token');
+    return token && token !== 'undefined' && token !== 'null' && token.length > 10;
 }
 
 function auth_has_recently_connected() {
@@ -51,17 +52,24 @@ function auth_get_hash(length) {
     return GENERATE_RANDOM_STRING(length || 16);
 }
 
-// Clean UI toggle that only hides the auth card without breaking layout containers
+// Immediate token verification and view setup
 function auth_parse_connection_parameters() {
     if (auth_check_token()) {
         const token = auth_get_access_token();
+        console.log("Valid Spotify Token found:", token.substring(0, 8) + "...");
 
-        // Safely hide only the authentication container if present
-        document.querySelectorAll('.auth-container').forEach(el => {
-            el.style.display = 'none';
+        // Hide only the connect card/button container if it exists
+        const authContainer = document.querySelector('.auth-container');
+        if (authContainer) {
+            authContainer.style.display = 'none';
+        }
+
+        // Ensure the page container and main elements are explicitly visible
+        document.querySelectorAll('.page-container, .container, #app, main').forEach(el => {
+            el.style.display = 'block';
         });
 
-        // Inject token into any global Spotify instance if available
+        // Feed the token to any global spotify instance or constants
         if (window.spotify) {
             if (typeof window.spotify.init === 'function') {
                 window.spotify.init(token);
@@ -70,14 +78,21 @@ function auth_parse_connection_parameters() {
             }
         }
 
-        // Trigger playlist loaders safely after a brief DOM settling delay
+        // Trigger playlist retrieval functions
         setTimeout(() => {
             if (typeof loadPlaylists === 'function') loadPlaylists();
             else if (typeof fetchPlaylists === 'function') fetchPlaylists();
             else if (window.spotify && typeof window.spotify.get_playlists === 'function') {
                 window.spotify.get_playlists();
             }
-        }, 150);
+        }, 100);
+    } else {
+        console.log("No valid token found. Showing connect interface.");
+        // Ensure auth container is visible if no token exists
+        const authContainer = document.querySelector('.auth-container');
+        if (authContainer) {
+            authContainer.style.display = 'block';
+        }
     }
 }
 
@@ -111,10 +126,9 @@ async function auth_connect_spotify() {
 async function auth_handle_callback() {
     if (auth_check_token()) {
         const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.has('code')) {
+        if (urlParams.has('code') || urlParams.has('state')) {
             window.history.replaceState({}, document.title, REDIRECT_URI);
         }
-        auth_parse_connection_parameters();
         return;
     }
 
@@ -124,7 +138,10 @@ async function auth_handle_callback() {
     if (!code) return;
 
     const codeVerifier = window.localStorage.getItem('code_verifier');
-    if (!codeVerifier) return;
+    if (!codeVerifier) {
+        alert("Missing code verifier in storage. Please try connecting again.");
+        return;
+    }
 
     window.localStorage.removeItem('code_verifier');
 
