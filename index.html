@@ -365,14 +365,21 @@
                 statusEl.textContent = "Fetching playlist tracks...";
                 let tracks = [];
                 let url = `/playlists/${playlistId}/tracks?limit=100`;
+                
                 while (url) {
                     const data = await callSpotify(url.replace('https://api.spotify.com/v1', ''));
-                    tracks.push(...data.items.map(item => item.uri).filter(Boolean));
-                    url = data.next;
+                    // Safely parse items, handling potential null tracks or different structures
+                    if (data && data.items) {
+                        const uris = data.items
+                            .map(item => item && item.track ? item.track.uri : (item ? item.uri : null))
+                            .filter(Boolean);
+                        tracks.push(...uris);
+                    }
+                    url = data && data.next ? data.next.replace('https://api.spotify.com/v1', '') : null;
                 }
 
                 if (tracks.length === 0) {
-                    statusEl.textContent = "Selected playlist is empty!";
+                    statusEl.textContent = "Selected playlist is empty or tracks couldn't be read!";
                     return;
                 }
 
@@ -384,7 +391,6 @@
 
                 statusEl.textContent = "Starting playback on target device...";
                 
-                // Single unified request bypassing the race condition
                 const res = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
                     method: 'PUT',
                     headers: {
