@@ -1,436 +1,140 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>True Shuffle For Spotify</title>
-    <style>
-        :root {
-            --bg-color: #121212;
-            --card-bg: #181818;
-            --hover-bg: #282828;
-            --spotify-green: #1db954;
-            --spotify-green-hover: #1ed760;
-            --text-white: #ffffff;
-            --text-gray: #b3b3b3;
-            --border-color: #333333;
-        }
+import React, { useState, useEffect } from 'react';
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        }
+// Replace with your credentials or env variables
+const CLIENT_ID = '9e09bf13b9e640d8b7d94b58ad885484';
+const REDIRECT_URI = typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:8080';
+const SCOPES = 'playlist-read-private playlist-read-collaborative user-modify-playback-state user-read-playback-state';
 
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-white);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            padding: 20px;
-        }
+export default function TrueShuffleApp() {
+  const [token, setToken] = useState(null);
+  const [playlists, setPlaylists] = useState([]);
+  const [status, setStatus] = useState('Please log in with Spotify');
 
-        .app-container {
-            width: 100%;
-            max-width: 440px;
-            background-color: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 30px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-            text-align: center;
-        }
+  // Handle PKCE / Token Auth flow on load
+  useEffect(() => {
+    const hash = window.location.hash;
+    let tokenData = window.localStorage.getItem('spotify_token');
 
-        h1 {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 8px;
-        }
+    if (!tokenData && hash) {
+      const params = new URLSearchParams(hash.substring(1));
+      tokenData = params.get('access_token');
+      if (tokenData) {
+        window.localStorage.setItem('spotify_token', tokenData);
+        window.location.hash = '';
+      }
+    }
+    if (tokenData) {
+      setToken(tokenData);
+      fetchPlaylists(tokenData);
+    }
+  }, []);
 
-        .subtitle {
-            color: var(--text-gray);
-            font-size: 14px;
-            margin-bottom: 24px;
-        }
+  const login = () => {
+    window.location.href = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}`;
+  };
 
-        .section {
-            margin-bottom: 20px;
-            text-align: left;
-        }
+  const fetchPlaylists = async (accessToken) => {
+    setStatus('Fetching your playlists...');
+    try {
+      const res = await fetch('https://api.spotify.com/v1/me/playlists?limit=50', {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      const data = await res.json();
+      if (data.items) {
+        setPlaylists(data.items);
+        setStatus('Select a playlist to True Shuffle into your queue:');
+      } else {
+        setStatus('Failed to load playlists.');
+      }
+    } catch (err) {
+      setStatus(`Error: ${err.message}`);
+    }
+  };
 
-        label {
-            display: block;
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-gray);
-            margin-bottom: 8px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
+  const trueShufflePlaylist = async (playlistId, playlistName) => {
+    setStatus(`Fetching tracks from '${playlistName}'...`);
+    try {
+      let tracks = [];
+      let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`;
 
-        select, button {
-            width: 100%;
-            padding: 12px 16px;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            background-color: var(--hover-bg);
-            color: var(--text-white);
-            font-size: 15px;
-            outline: none;
-            transition: all 0.2s ease;
-        }
-
-        select {
-            cursor: pointer;
-            appearance: none;
-            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23b3b3b3%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
-            background-repeat: no-repeat;
-            background-position: right 16px center;
-            background-size: 10px;
-            margin-bottom: 10px;
-        }
-
-        select:focus, button:hover {
-            border-color: var(--spotify-green);
-        }
-
-        .btn-primary {
-            background-color: var(--spotify-green);
-            color: #000;
-            font-weight: 700;
-            border: none;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-
-        .btn-primary:hover {
-            background-color: var(--spotify-green-hover);
-        }
-
-        .btn-secondary {
-            background-color: transparent;
-            border: 1px solid var(--border-color);
-            color: var(--text-white);
-            font-size: 13px;
-            padding: 8px;
-            margin-top: 8px;
-            cursor: pointer;
-        }
-        .btn-secondary:hover {
-            border-color: var(--text-white);
-        }
-
-        .hidden {
-            display: none !important;
-        }
-
-        .status-msg {
-            margin-top: 15px;
-            font-size: 13px;
-            color: var(--spotify-green);
-            min-height: 20px;
-            word-break: break-all;
-        }
-
-        .logout-link {
-            margin-top: 20px;
-            font-size: 12px;
-            color: var(--text-gray);
-            cursor: pointer;
-            text-decoration: underline;
-            background: none;
-            border: none;
-            width: auto;
-            padding: 0;
-        }
-        .logout-link:hover {
-            color: var(--text-white);
-        }
-    </style>
-</head>
-<body>
-
-    <div class="app-container">
-        <h1>True Shuffle For Spotify</h1>
-        <p class="subtitle">Bypass smart shuffle limitations cleanly.</p>
-
-        <!-- Login View -->
-        <div id="login_view" class="hidden">
-            <p style="margin-bottom: 20px; color: var(--text-gray); font-size: 14px;">Please connect your Spotify account to get started.</p>
-            <button class="btn-primary" onclick="loginSpotify()">Connect With Spotify</button>
-        </div>
-
-        <!-- Dashboard View -->
-        <div id="dashboard_view" class="hidden">
-            <div class="section">
-                <label for="playlist_select">Choose A Playlist</label>
-                <select id="playlist_select">
-                    <option value="">Select a playlist...</option>
-                </select>
-            </div>
-
-            <div class="section">
-                <label for="device_select">Select Target Device</label>
-                <select id="device_select">
-                    <option value="">-- Click Refresh Devices --</option>
-                </select>
-                <button class="btn-secondary" onclick="refreshDevices()">🔄 Refresh Devices</button>
-            </div>
-
-            <button class="btn-primary" onclick="triggerTrueShuffle()">Start True Shuffle</button>
-            <div id="status" class="status-msg"></div>
-
-            <button class="logout-link" onclick="logoutSpotify()">Disconnect Account</button>
-        </div>
-    </div>
-
-    <script>
-        const CLIENT_ID = '9e09bf13b9e640d8b7d94b58ad885484';
-        const REDIRECT_URI = window.location.origin + window.location.pathname;
-        const SCOPES = [
-            'playlist-read-private',
-            'playlist-read-collaborative',
-            'user-modify-playback-state',
-            'user-read-playback-state',
-            'user-library-read'
-        ].join(' ');
-
-        function generateRandomString(length) {
-            const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-            const values = crypto.getRandomValues(new Uint8Array(length));
-            return values.reduce((acc, x) => acc + possible[x % possible.length], '');
-        }
-
-        async function sha256(plain) {
-            const encoder = new TextEncoder();
-            const data = encoder.encode(plain);
-            return window.crypto.subtle.digest('SHA-256', data);
-        }
-
-        function base64encode(input) {
-            return btoa(String.fromCharCode(...new Uint8Array(input)))
-                .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-        }
-
-        async function loginSpotify() {
-            const codeVerifier = generateRandomString(64);
-            const hashed = await sha256(codeVerifier);
-            const codeChallenge = base64encode(hashed);
-
-            localStorage.setItem('code_verifier', codeVerifier);
-
-            const authUrl = new URL("https://accounts.spotify.com/authorize");
-            authUrl.search = new URLSearchParams({
-                response_type: 'code',
-                client_id: CLIENT_ID,
-                scope: SCOPES,
-                code_challenge_method: 'S256',
-                code_challenge: codeChallenge,
-                redirect_uri: REDIRECT_URI,
-            });
-
-            window.location.href = authUrl.toString();
-        }
-
-        function logoutSpotify() {
-            localStorage.clear();
-            window.location.href = REDIRECT_URI;
-        }
-
-        async function handleCallback() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const code = urlParams.get('code');
-            if (!code) return false;
-
-            const codeVerifier = localStorage.getItem('code_verifier');
-            if (!codeVerifier) return false;
-            localStorage.removeItem('code_verifier');
-
-            try {
-                const response = await fetch("https://accounts.spotify.com/api/token", {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({
-                        grant_type: 'authorization_code',
-                        client_id: CLIENT_ID,
-                        code: code,
-                        redirect_uri: REDIRECT_URI,
-                        code_verifier: codeVerifier,
-                    }),
-                });
-
-                const data = await response.json();
-                if (data.access_token) {
-                    localStorage.setItem('spotify_access_token', data.access_token);
-                    if (data.refresh_token) localStorage.setItem('spotify_refresh_token', data.refresh_token);
-                    window.history.replaceState({}, document.title, REDIRECT_URI);
-                    return true;
-                }
-            } catch (err) {
-                console.error("Auth callback error:", err);
-            }
-            return false;
-        }
-
-        async function callSpotify(endpoint, method = 'GET', body = null) {
-            const token = localStorage.getItem('spotify_access_token');
-            if (!token) throw new Error("No token available");
-
-            const options = {
-                method,
-                headers: { 'Authorization': `Bearer ${token}` }
-            };
-            if (body) {
-                options.headers['Content-Type'] = 'application/json';
-                options.body = JSON.stringify(body);
-            }
-
-            const res = await fetch(`https://api.spotify.com/v1${endpoint}`, options);
-            if (res.status === 401) {
-                logoutSpotify();
-                throw new Error("Token expired");
-            }
-            if (res.status === 204) return null;
-            return res.json();
-        }
-
-        async function loadAppData() {
-            try {
-                const playlistsData = await callSpotify('/me/playlists?limit=50');
-                const playlistSelect = document.getElementById('playlist_select');
-                playlistsData.items.forEach(pl => {
-                    const opt = document.createElement('option');
-                    opt.value = pl.id;
-                    opt.textContent = pl.name;
-                    playlistSelect.appendChild(opt);
-                });
-
-                await refreshDevices();
-            } catch (err) {
-                console.error("Failed to load app data:", err);
-                document.getElementById('status').textContent = "Error loading data. Try reconnecting.";
-            }
-        }
-
-        async function refreshDevices() {
-            const statusEl = document.getElementById('status');
-            const deviceSelect = document.getElementById('device_select');
-            statusEl.textContent = "Scanning active Spotify devices...";
-
-            try {
-                const devicesData = await callSpotify('/me/player/devices');
-                deviceSelect.innerHTML = '';
-
-                if (!devicesData.devices || devicesData.devices.length === 0) {
-                    deviceSelect.innerHTML = '<option value="">No devices found</option>';
-                    statusEl.textContent = "No devices found. Open Spotify on your S23 and play a song for 2 seconds.";
-                    return;
-                }
-
-                devicesData.devices.forEach(d => {
-                    const opt = document.createElement('option');
-                    opt.value = d.id;
-                    opt.textContent = `${d.name} (${d.type})${d.is_active ? ' [ACTIVE]' : ''}`;
-                    if (d.name.toLowerCase().includes('s23') || d.is_active) {
-                        opt.selected = true;
-                    }
-                    deviceSelect.appendChild(opt);
-                });
-
-                statusEl.textContent = `Found ${devicesData.devices.length} device(s). Ready!`;
-            } catch (err) {
-                console.error(err);
-                statusEl.textContent = "Error scanning devices.";
-            }
-        }
-
-        async function triggerTrueShuffle() {
-            const playlistId = document.getElementById('playlist_select').value;
-            const deviceId = document.getElementById('device_select').value;
-            const statusEl = document.getElementById('status');
-
-            if (!playlistId) {
-                alert("Please select a playlist first.");
-                return;
-            }
-            if (!deviceId) {
-                alert("Please select your target device from the dropdown.");
-                return;
-            }
-
-            try {
-                statusEl.textContent = "Fetching playlist tracks...";
-                let tracks = [];
-                let url = `/playlists/${playlistId}/tracks?limit=100`;
-                
-                while (url) {
-                    const data = await callSpotify(url.replace('https://api.spotify.com/v1', ''));
-                    // Safely parse items, handling potential null tracks or different structures
-                    if (data && data.items) {
-                        const uris = data.items
-                            .map(item => item && item.track ? item.track.uri : (item ? item.uri : null))
-                            .filter(Boolean);
-                        tracks.push(...uris);
-                    }
-                    url = data && data.next ? data.next.replace('https://api.spotify.com/v1', '') : null;
-                }
-
-                if (tracks.length === 0) {
-                    statusEl.textContent = "Selected playlist is empty or tracks couldn't be read!";
-                    return;
-                }
-
-                statusEl.textContent = "Shuffling tracks randomly...";
-                for (let i = tracks.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [tracks[i], tracks[j]] = [tracks[j], tracks[i]];
-                }
-
-                statusEl.textContent = "Starting playback on target device...";
-                
-                const res = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('spotify_access_token')}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        uris: tracks.slice(0, 50)
-                    })
-                });
-
-                if (!res.ok) {
-                    let errorMsg = `HTTP error ${res.status}`;
-                    try {
-                        const errData = await res.json();
-                        if (errData.error && errData.error.message) {
-                            errorMsg = errData.error.message;
-                        }
-                    } catch (e) {}
-                    throw new Error(errorMsg);
-                }
-
-                statusEl.textContent = "True Shuffle started successfully!";
-            } catch (err) {
-                console.error(err);
-                statusEl.textContent = "Error: " + err.message;
-            }
-        }
-
-        window.addEventListener('DOMContentLoaded', async () => {
-            await handleCallback();
-
-            const token = localStorage.getItem('spotify_access_token');
-            if (token) {
-                document.getElementById('dashboard_view').classList.remove('hidden');
-                loadAppData();
-            } else {
-                document.getElementById('login_view').classList.remove('hidden');
-            }
+      // Pagination loop
+      while (url) {
+        const res = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` }
         });
-    </script>
-</body>
-</html>
+        const data = await res.json();
+        
+        if (data.items) {
+          data.items.forEach(item => {
+            const track = item.track || item.item;
+            if (track && track.uri) {
+              tracks.append ? tracks.append(track.uri) : tracks.push(track.uri);
+            }
+          });
+        }
+        url = data.next;
+      }
+
+      if (tracks.length === 0) {
+        setStatus('No tracks found in this playlist.');
+        return;
+      }
+
+      setStatus(`Found ${tracks.length} tracks. Shuffling...`);
+
+      // Fisher-Yates Shuffle
+      for (let i = tracks.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [tracks[i], tracks[j]] = [tracks[j], tracks[i]];
+      }
+
+      // Filter out local files so API doesn't throw a 400 error
+      const playableTracks = tracks.filter(uri => !uri.startsWith('spotify:local:'));
+
+      setStatus('Sending shuffled queue to your device...');
+      
+      const playRes = await fetch('https://api.spotify.com/v1/me/player/play', {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ uris: playableTracks.slice(0, 50) })
+      });
+
+      if (playRes.ok || playRes.status === 204) {
+        setStatus(`Success! True Shuffled ${Math.min(playableTracks.length, 50)} tracks into your queue. (Original playlist untouched).`);
+      } else {
+        const errData = await playRes.json();
+        setStatus(`Playback Error: ${errData.error?.message || 'Make sure Spotify is open on your S23!'}`);
+      }
+    } catch (err) {
+      setStatus(`Error: ${err.message}`);
+    }
+  };
+
+  return (
+    <div style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '600px', margin: 'auto' }}>
+      <h2>Spotify True Shuffler</h2>
+      <p>{status}</p>
+
+      {!token ? (
+        <button onClick={login} style={{ padding: '10px 20px', fontSize: '16px' }}>
+          Log in with Spotify
+        </button>
+      ) : (
+        <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+          {playlists.map((pl, idx) => (
+            <div 
+              key={pl.id || idx} 
+              onClick={() => trueShufflePlaylist(pl.id, pl.name)}
+              style={{ padding: '10px', margin: '5px 0', background: '#f0f0f0', cursor: 'pointer', borderRadius: '4px' }}
+            >
+              {idx}: {pl.name}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
