@@ -90,6 +90,7 @@
             background-repeat: no-repeat;
             background-position: right 16px center;
             background-size: 10px;
+            margin-bottom: 10px;
         }
 
         select:focus, button:hover {
@@ -107,6 +108,19 @@
 
         .btn-primary:hover {
             background-color: var(--spotify-green-hover);
+        }
+
+        .btn-secondary {
+            background-color: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-white);
+            font-size: 13px;
+            padding: 8px;
+            margin-top: 8px;
+            cursor: pointer;
+        }
+        .btn-secondary:hover {
+            border-color: var(--text-white);
         }
 
         .hidden {
@@ -157,10 +171,12 @@
                 </select>
             </div>
 
-            <div class="section" style="background: rgba(29, 185, 84, 0.05); padding: 12px; border-radius: 8px; border: 1px dashed var(--spotify-green);">
-                <p style="font-size: 12px; color: var(--text-gray); line-height: 1.4;">
-                    🎯 <strong style="color: var(--text-white);">Target:</strong> Locked to your Galaxy S23 Spotify App. Ensure Spotify is open on your phone!
-                </p>
+            <div class="section">
+                <label for="device_select">Select Target Device</label>
+                <select id="device_select">
+                    <option value="">-- Click Refresh Devices --</option>
+                </select>
+                <button class="btn-secondary" onclick="refreshDevices()">🔄 Refresh / Find S23</button>
             </div>
 
             <button class="btn-primary" onclick="triggerTrueShuffle()">Start True Shuffle</button>
@@ -290,25 +306,64 @@
                     opt.textContent = pl.name;
                     playlistSelect.appendChild(opt);
                 });
+
+                await refreshDevices();
             } catch (err) {
                 console.error("Failed to load app data:", err);
-                document.getElementById('status').textContent = "Error loading playlists. Try reconnecting.";
+                document.getElementById('status').textContent = "Error loading data. Try reconnecting.";
+            }
+        }
+
+        async function refreshDevices() {
+            const statusEl = document.getElementById('status');
+            const deviceSelect = document.getElementById('device_select');
+            statusEl.textContent = "Scanning active Spotify devices...";
+
+            try {
+                const devicesData = await callSpotify('/me/player/devices');
+                deviceSelect.innerHTML = '';
+
+                if (!devicesData.devices || devicesData.devices.length === 0) {
+                    deviceSelect.innerHTML = '<option value="">No devices found! Open Spotify on S23</option>';
+                    statusEl.textContent = "No devices found. Open the Spotify app on your S23 and play a second of any song.";
+                    return;
+                }
+
+                devicesData.devices.forEach(d => {
+                    const opt = document.createElement('option');
+                    opt.value = d.id;
+                    opt.textContent = `${d.name} (${d.type})${d.is_active ? ' [ACTIVE]' : ''}`;
+                    // Automatically select it if it matches "S23", "Galaxy", or is active
+                    if (d.name.toLowerCase().includes('s23') || d.is_active) {
+                        opt.selected = true;
+                    }
+                    deviceSelect.appendChild(opt);
+                });
+
+                statusEl.textContent = `Found ${devicesData.devices.length} device(s). Ready!`;
+            } catch (err) {
+                console.error(err);
+                statusEl.textContent = "Error scanning devices.";
             }
         }
 
         async function triggerTrueShuffle() {
             const playlistId = document.getElementById('playlist_select').value;
+            const deviceId = document.getElementById('device_select').value;
             const statusEl = document.getElementById('status');
 
             if (!playlistId) {
                 alert("Please select a playlist first.");
                 return;
             }
+            if (!deviceId) {
+                alert("Please select or refresh your target device.");
+                return;
+            }
 
             statusEl.textContent = "Fetching playlist tracks...";
 
             try {
-                // 1. Fetch all tracks from playlist with pagination
                 let tracks = [];
                 let url = `/playlists/${playlistId}/tracks?limit=100`;
                 while (url) {
@@ -322,46 +377,27 @@
                     return;
                 }
 
-                // 2. Fisher-Yates True Shuffle algorithm
                 statusEl.textContent = "Shuffling tracks randomly...";
                 for (let i = tracks.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
                     [tracks[i], tracks[j]] = [tracks[j], tracks[i]];
                 }
 
-                // 3. Scan devices specifically looking for Galaxy S23, Samsung, or smartphone signatures
-                statusEl.textContent = "Locating Galaxy S23...";
-                const devicesData = await callSpotify('/me/player/devices');
-                
-                let targetDevice = devicesData.devices.find(d => 
-                    d.name.toLowerCase().includes('galaxy') || 
-                    d.name.toLowerCase().includes('s23') || 
-                    d.name.toLowerCase().includes('samsung') ||
-                    d.type.toLowerCase() === 'smartphone'
-                ) || devicesData.devices.find(d => d.is_active) || devicesData.devices[0];
-
-                if (!targetDevice) {
-                    statusEl.textContent = "Error: Open Spotify on your Galaxy S23 first!";
-                    return;
-                }
-
-                // 4. Force transfer playback focus to your S23
-                statusEl.textContent = `Targeting: ${targetDevice.name}...`;
+                statusEl.textContent = "Transferring playback to S23...";
                 await callSpotify('/me/player', 'PUT', {
-                    device_ids: [targetDevice.id],
+                    device_ids: [deviceId],
                     play: false
                 });
 
-                // 5. Fire shuffled tracks directly to your phone
-                statusEl.textContent = "Starting playback on S23...";
-                await callSpotify(`/me/player/play?device_id=${targetDevice.id}`, 'PUT', {
+                statusEl.textContent = "Starting playback...";
+                await callSpotify(`/me/player/play?device_id=${deviceId}`, 'PUT', {
                     uris: tracks.slice(0, 50)
                 });
 
-                statusEl.textContent = "True Shuffle started on your Galaxy S23!";
+                statusEl.textContent = "True Shuffle started successfully!";
             } catch (err) {
                 console.error(err);
-                statusEl.textContent = "Error: Open Spotify app on your phone and try again.";
+                statusEl.textContent = "Error: Open Spotify on your S23, hit play once, then try again.";
             }
         }
 
