@@ -29,6 +29,9 @@ const AUTH_APPLICATION_SCOPES = [
     'user-read-playback-state'
 ].join(' ');
 
+// Exact matching redirect URI for your Spotify dashboard configuration
+const REDIRECT_URI = 'https://spotify-true-shuffle.vercel.app/';
+
 // Legacy compatibility functions required by main.js
 function auth_get_access_token() {
     return window.localStorage.getItem('spotify_access_token');
@@ -62,10 +65,7 @@ async function auth_connect_spotify() {
         const hashed = await SHA256(codeVerifier);
         const codeChallenge = BASE64_ENCODE(hashed);
 
-        // Use sessionStorage instead of localStorage to survive mobile redirects reliably
         window.sessionStorage.setItem('code_verifier', codeVerifier);
-
-        const callback_uri = window.location.origin + window.location.pathname;
         const integrity = auth_get_hash(60);
 
         const authUrl = new URL("https://accounts.spotify.com/authorize");
@@ -75,7 +75,7 @@ async function auth_connect_spotify() {
             scope: AUTH_APPLICATION_SCOPES,
             code_challenge_method: 'S256',
             code_challenge: codeChallenge,
-            redirect_uri: callback_uri,
+            redirect_uri: REDIRECT_URI,
             state: integrity
         };
 
@@ -93,12 +93,11 @@ async function auth_handle_callback() {
 
     if (!code) return;
 
-    // Clean URL immediately so code isn't reused
     window.history.replaceState({}, document.title, window.location.pathname);
 
     const codeVerifier = window.sessionStorage.getItem('code_verifier');
     if (!codeVerifier) {
-        alert("Error: Code verifier missing from session storage. Mobile browser privacy settings may have blocked it.");
+        alert("Error: Code verifier missing from session storage.");
         return;
     }
 
@@ -112,7 +111,7 @@ async function auth_handle_callback() {
                 grant_type: 'authorization_code',
                 client_id: AUTH_CLIENT_ID,
                 code: code,
-                redirect_uri: window.location.origin + window.location.pathname,
+                redirect_uri: REDIRECT_URI,
                 code_verifier: codeVerifier,
             }),
         });
@@ -124,7 +123,7 @@ async function auth_handle_callback() {
                 window.localStorage.setItem('spotify_refresh_token', data.refresh_token);
             }
             window.sessionStorage.removeItem('code_verifier');
-            window.location.href = window.location.origin + window.location.pathname;
+            window.location.href = REDIRECT_URI;
         } else {
             alert(`Token exchange failed: ${JSON.stringify(data)}`);
         }
