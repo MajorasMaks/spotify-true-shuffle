@@ -157,14 +157,10 @@
                 </select>
             </div>
 
-            <div class="section">
-                <label for="device_select" style="display: flex; justify-content: space-between; align-items: center;">
-                    Choose Active Device 
-                    <span onclick="loadDevices()" style="color: var(--spotify-green); cursor: pointer; font-size: 11px; text-transform: none;">🔄 Refresh</span>
-                </label>
-                <select id="device_select">
-                    <option value="">Select a device...</option>
-                </select>
+            <div class="section" style="background: rgba(29, 185, 84, 0.05); padding: 12px; border-radius: 8px; border: 1px dashed var(--spotify-green);">
+                <p style="font-size: 12px; color: var(--text-gray); line-height: 1.4;">
+                    🎯 <strong style="color: var(--text-white);">Target:</strong> Locked to your Galaxy S23 Spotify App. Ensure Spotify is open on your phone!
+                </p>
             </div>
 
             <button class="btn-primary" onclick="triggerTrueShuffle()">Start True Shuffle</button>
@@ -185,7 +181,6 @@
             'user-library-read'
         ].join(' ');
 
-        // Crypto helpers for PKCE
         function generateRandomString(length) {
             const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
             const values = crypto.getRandomValues(new Uint8Array(length));
@@ -285,39 +280,8 @@
             return res.json();
         }
 
-        async function loadDevices() {
-            try {
-                const deviceSelect = document.getElementById('device_select');
-                deviceSelect.innerHTML = '<option value="">Select a device...</option>';
-                
-                const devicesData = await callSpotify('/me/player/devices');
-                let foundAndroid = false;
-
-                devicesData.devices.forEach(dev => {
-                    const opt = document.createElement('option');
-                    opt.value = dev.id;
-                    opt.textContent = `${dev.name} (${dev.type})`;
-                    
-                    // Prioritize Android/Smartphone automatically
-                    const isAndroidDevice = dev.type.toLowerCase() === 'smartphone' || dev.name.toLowerCase().includes('android');
-                    
-                    if (isAndroidDevice && !foundAndroid) {
-                        opt.selected = true;
-                        foundAndroid = true;
-                    } else if (dev.is_active && !foundAndroid) {
-                        opt.selected = true;
-                    }
-                    
-                    deviceSelect.appendChild(opt);
-                });
-            } catch (err) {
-                console.error("Failed to load devices:", err);
-            }
-        }
-
         async function loadAppData() {
             try {
-                // Fetch Playlists
                 const playlistsData = await callSpotify('/me/playlists?limit=50');
                 const playlistSelect = document.getElementById('playlist_select');
                 playlistsData.items.forEach(pl => {
@@ -326,18 +290,14 @@
                     opt.textContent = pl.name;
                     playlistSelect.appendChild(opt);
                 });
-
-                // Fetch and auto-select devices
-                await loadDevices();
             } catch (err) {
                 console.error("Failed to load app data:", err);
-                document.getElementById('status').textContent = "Error loading account data. Try reconnecting.";
+                document.getElementById('status').textContent = "Error loading playlists. Try reconnecting.";
             }
         }
 
         async function triggerTrueShuffle() {
             const playlistId = document.getElementById('playlist_select').value;
-            const deviceId = document.getElementById('device_select').value;
             const statusEl = document.getElementById('status');
 
             if (!playlistId) {
@@ -348,7 +308,7 @@
             statusEl.textContent = "Fetching playlist tracks...";
 
             try {
-                // Fetch all tracks from playlist
+                // 1. Fetch all tracks from playlist with pagination
                 let tracks = [];
                 let url = `/playlists/${playlistId}/tracks?limit=100`;
                 while (url) {
@@ -362,47 +322,46 @@
                     return;
                 }
 
-                // Fisher-Yates True Shuffle algorithm
-                statusEl.textContent = "Shuffling tracks...";
+                // 2. Fisher-Yates True Shuffle algorithm
+                statusEl.textContent = "Shuffling tracks randomly...";
                 for (let i = tracks.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
                     [tracks[i], tracks[j]] = [tracks[j], tracks[i]];
                 }
 
-                statusEl.textContent = "Starting playback...";
+                // 3. Scan devices specifically looking for Galaxy S23, Samsung, or smartphone signatures
+                statusEl.textContent = "Locating Galaxy S23...";
+                const devicesData = await callSpotify('/me/player/devices');
+                
+                let targetDevice = devicesData.devices.find(d => 
+                    d.name.toLowerCase().includes('galaxy') || 
+                    d.name.toLowerCase().includes('s23') || 
+                    d.name.toLowerCase().includes('samsung') ||
+                    d.type.toLowerCase() === 'smartphone'
+                ) || devicesData.devices.find(d => d.is_active) || devicesData.devices[0];
 
-                // Build play request endpoint with optional device targeting
-                let playEndpoint = '/me/player/play';
-                if (deviceId) {
-                    playEndpoint += `?device_id=${deviceId}`;
+                if (!targetDevice) {
+                    statusEl.textContent = "Error: Open Spotify on your Galaxy S23 first!";
+                    return;
                 }
 
-                const res = await fetch(`https://api.spotify.com/v1${playEndpoint}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('spotify_access_token')}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ uris: tracks.slice(0, 50) })
+                // 4. Force transfer playback focus to your S23
+                statusEl.textContent = `Targeting: ${targetDevice.name}...`;
+                await callSpotify('/me/player', 'PUT', {
+                    device_ids: [targetDevice.id],
+                    play: false
                 });
 
-                if (!res.ok) {
-                    // Fallback to active device if specific device ID fails
-                    const fallbackRes = await fetch(`https://api.spotify.com/v1/me/player/play`, {
-                        method: 'PUT',
-                        headers: {
-                            'Authorization': `Bearer ${localStorage.getItem('spotify_access_token')}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ uris: tracks.slice(0, 50) })
-                    });
-                    if (!fallbackRes.ok) throw new Error("Playback failed");
-                }
+                // 5. Fire shuffled tracks directly to your phone
+                statusEl.textContent = "Starting playback on S23...";
+                await callSpotify(`/me/player/play?device_id=${targetDevice.id}`, 'PUT', {
+                    uris: tracks.slice(0, 50)
+                });
 
-                statusEl.textContent = "True Shuffle started successfully!";
+                statusEl.textContent = "True Shuffle started on your Galaxy S23!";
             } catch (err) {
                 console.error(err);
-                statusEl.textContent = "Error: Open Spotify app or play a track manually first.";
+                statusEl.textContent = "Error: Open Spotify app on your phone and try again.";
             }
         }
 
