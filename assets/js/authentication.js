@@ -1,3 +1,23 @@
+// PKCE Authentication helper functions
+const GENERATE_RANDOM_STRING = (length) => {
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const values = crypto.getRandomValues(new Uint8Array(length));
+    return values.reduce((acc, x) => acc + possible[x % possible.length], '');
+};
+
+const SHA256 = async (plain) => {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(plain);
+    return window.crypto.subtle.digest('SHA-256', data);
+};
+
+const BASE64_ENCODE = (input) => {
+    return btoa(String.fromCharCode(...new Uint8Array(input)))
+        .replace(/=/g, '')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_');
+};
+
 const AUTH_CLIENT_ID = '9e09bf13b9e640d8b7d94b58ad885484';
 const AUTH_APPLICATION_SCOPES = [
     'playlist-modify-public',
@@ -24,31 +44,35 @@ function auth_check_token() {
 }
 
 function auth_has_recently_connected() {
-    return !!window.localStorage.getItem('spotify_access_token');
+    return !!window.localStorage.getItem('spotify_refresh_token');
 }
 
 function auth_get_hash(length) {
-    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    const values = crypto.getRandomValues(new Uint8Array(length || 16));
-    return values.reduce((acc, x) => acc + possible[x % possible.length], '');
+    return GENERATE_RANDOM_STRING(length || 16);
 }
 
 function auth_parse_connection_parameters() {
-    // Handled in auth_handle_callback
+    // Handled via auth_handle_callback
 }
 
-// Connect trigger using Token response type (Implicit Flow)
 async function auth_connect_spotify() {
     try {
-        const state = auth_get_hash(32);
+        const codeVerifier = GENERATE_RANDOM_STRING(64);
+        const hashed = await SHA256(codeVerifier);
+        const codeChallenge = BASE64_ENCODE(hashed);
+
+        window.localStorage.setItem('code_verifier', codeVerifier);
+        const integrity = auth_get_hash(60);
+
         const authUrl = new URL("https://accounts.spotify.com/authorize");
         const params = {
-            response_type: 'token',
+            response_type: 'code',
             client_id: AUTH_CLIENT_ID,
             scope: AUTH_APPLICATION_SCOPES,
+            code_challenge_method: 'S256',
+            code_challenge: codeChallenge,
             redirect_uri: REDIRECT_URI,
-            state: state,
-            show_dialog: 'true'
+            state: integrity
         };
 
         authUrl.search = new URLSearchParams(params).toString();
@@ -58,20 +82,58 @@ async function auth_connect_spotify() {
     }
 }
 
-// Extract access token directly from the URL hash fragment upon return
+// Intercepts the return immediately and handles token exchange before main app loads
 async function auth_handle_callback() {
-    const hash = window.location.hash.substring(1);
-    const params = new URLSearchParams(hash);
-    const accessToken = params.get('access_token');
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
 
-    if (!accessToken) return;
+    if (!code) return false; // No code, normal app load check
 
-    // Save token and clean URL hash
-    window.localStorage.setItem('spotify_access_token', accessToken);
-    window.history.replaceState({}, document.title, REDIRECT_URI);
-    window.location.reload();
+    // We have a code! Hide standard UI elements temporarily if needed
+    const codeVerifier = window.localStorage.getItem('code_verifier');
+    if (!codeVerifier) {
+        alert("Error: Code verifier missing from storage. Please try logging in again.");
+        return false;
+    }
+
+    try {
+        const response = await fetch("https://accounts.spotify.com/api/token", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: new URLSearchParams({
+                grant_type: 'authorization_code',
+                client_id: AUTH_CLIENT_ID,
+                code: code,
+                redirect_uri: REDIRECT_URI,
+                code_verifier: codeVerifier,
+            }),
+        });
+
+        const data = await response.json();
+        if (data.access_token) {
+            window.localStorage.setItem('spotify_access_token', data.access_token);
+            if (data.refresh_token) {
+                window.localStorage.setItem('spotify_refresh_token', data.refresh_token);
+            }
+            window.localStorage.removeItem('code_verifier');
+            
+            // Clean URL and reload cleanly so token is active
+            window.history.replaceState({}, document.title, REDIRECT_URI);
+            window.location.reload();
+            return true;
+        } else {
+            alert(`Token exchange failed: ${JSON.stringify(data)}`);
+            return false;
+        }
+    } catch (err) {
+        alert(`Network error during token exchange: ${err}`);
+        return false;
+    }
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-    auth_handle_callback();
-});
+// Run callback check immediately before DOM content settles
+(async function() {
+    await auth_handle_callback();
+})();
