@@ -18,7 +18,6 @@ const BASE64_ENCODE = (input) => {
         .replace(/\//g, '_');
 };
 
-// Explicit configuration to avoid missing reference errors
 const AUTH_CLIENT_ID = '9e09bf13b9e640d8b7d94b58ad885484';
 const AUTH_APPLICATION_SCOPES = [
     'playlist-modify-public',
@@ -39,9 +38,7 @@ async function auth_connect_spotify() {
         window.localStorage.setItem('code_verifier', codeVerifier);
 
         const callback_uri = location.origin + location.pathname;
-        
-        // Fallback dummy hash function if auth_get_hash is missing from other scripts
-        const integrity = typeof auth_get_hash === 'function' ? auth_get_hash(60) : GENERATE_RANDOM_STRING(16);
+        const integrity = GENERATE_RANDOM_STRING(16);
 
         const authUrl = new URL("https://accounts.spotify.com/authorize");
         const params = {
@@ -61,13 +58,13 @@ async function auth_connect_spotify() {
     }
 }
 
-// Check for authorization code on page load and exchange it for a token
 async function auth_handle_callback() {
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
 
     if (!code) return;
 
+    // Clear parameters immediately to prevent loops
     window.history.replaceState({}, document.title, location.pathname);
 
     const codeVerifier = window.localStorage.getItem('code_verifier');
@@ -94,7 +91,7 @@ async function auth_handle_callback() {
             if (data.refresh_token) {
                 window.localStorage.setItem('spotify_refresh_token', data.refresh_token);
             }
-            window.location.reload();
+            window.location.href = location.origin + location.pathname;
         } else {
             alert(`Token exchange failed: ${JSON.stringify(data)}`);
         }
