@@ -51,15 +51,20 @@ function auth_get_hash(length) {
     return GENERATE_RANDOM_STRING(length || 16);
 }
 
-// Called by main.js on startup to verify state and toggle UI views
+// Universal UI switcher that forces the connect button to hide if token exists
 function auth_parse_connection_parameters() {
     if (auth_check_token()) {
-        // If token exists, hide landing/connect view and show main app container
-        const landing = document.getElementById('landing_page') || document.getElementById('connect_container');
-        const app = document.getElementById('app_container') || document.getElementById('main_container');
-        
-        if (landing) landing.style.display = 'none';
-        if (app) app.style.display = 'block';
+        // Hide common connect/landing wrappers
+        ['landing_page', 'connect_container', 'auth_container', 'login_section', 'connect_button'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+
+        // Show common main app wrappers
+        ['app_container', 'main_container', 'dashboard', 'app', 'shuffle_container'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'block';
+        });
     }
 }
 
@@ -91,7 +96,6 @@ async function auth_connect_spotify() {
 }
 
 async function auth_handle_callback() {
-    // If already logged in, clean URL params and let main.js handle the view
     if (auth_check_token()) {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.has('code')) {
