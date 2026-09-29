@@ -1,5 +1,6 @@
 // Get your own Spotify Client ID at https://developer.spotify.com/
-const AUTH_CLIENT_ID = '0e188cfad9f3470ca424b84c2dc532df';
+const AUTH_CLIENT_ID = 
+'9e09bf13b9e640d8b7d94b58ad885484';
 const AUTH_MAX_RECENT_CONNECTION_AGE = 1000 * 60 * 60 * 24 * 7; // 7 days
 const AUTH_APPLICATION_SCOPES = [
     'playlist-modify-public',
