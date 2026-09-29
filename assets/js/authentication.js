@@ -93,7 +93,7 @@ function auth_connect_spotify() {
     log('AUTHENTICATION', `Redirecting to Spotify OAuth Page: ${callback_uri}`);
 
     // Redirect the user to the Spotify OAuth page
-    location.href = `https://accounts.spotify.com/authorize?client_id=${AUTH_CLIENT_ID}&response_type=token&redirect_uri=${callback_uri}&state=${integrity}&scope=${scopes}`;
+    location.href = `https://accounts.spotify.com/authorize?client_id=${AUTH_CLIENT_ID}&response_type=code&redirect_uri=${callback_uri}&state=${integrity}&scope=${scopes}`;
 }
 
 /**
