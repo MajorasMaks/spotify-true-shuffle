@@ -18,10 +18,19 @@ const BASE64_ENCODE = (input) => {
         .replace(/\//g, '_');
 };
 
-async function auth_connect_spotify() {
-    // Debug popup to instantly confirm the button handler is firing on mobile
-    alert("Connecting to Spotify...");
+// Explicit configuration to avoid missing reference errors
+const AUTH_CLIENT_ID = '9e09bf13b9e640d8b7d94b58ad885484';
+const AUTH_APPLICATION_SCOPES = [
+    'playlist-modify-public',
+    'playlist-modify-private',
+    'playlist-read-private',
+    'playlist-read-collaborative',
+    'user-modify-playback-state',
+    'user-library-read',
+    'user-read-playback-state'
+].join(' ');
 
+async function auth_connect_spotify() {
     try {
         const codeVerifier = GENERATE_RANDOM_STRING(64);
         const hashed = await SHA256(codeVerifier);
@@ -30,16 +39,15 @@ async function auth_connect_spotify() {
         window.localStorage.setItem('code_verifier', codeVerifier);
 
         const callback_uri = location.origin + location.pathname;
-        const scopes = AUTH_APPLICATION_SCOPES;
-        const integrity = auth_get_hash(60);
-
-        log('AUTHENTICATION', `Redirecting to Spotify OAuth PKCE Page: ${callback_uri}`);
+        
+        // Fallback dummy hash function if auth_get_hash is missing from other scripts
+        const integrity = typeof auth_get_hash === 'function' ? auth_get_hash(60) : GENERATE_RANDOM_STRING(16);
 
         const authUrl = new URL("https://accounts.spotify.com/authorize");
         const params = {
             response_type: 'code',
             client_id: AUTH_CLIENT_ID,
-            scope: scopes,
+            scope: AUTH_APPLICATION_SCOPES,
             code_challenge_method: 'S256',
             code_challenge: codeChallenge,
             redirect_uri: callback_uri,
@@ -60,14 +68,10 @@ async function auth_handle_callback() {
 
     if (!code) return;
 
-    // Clean up the URL bar immediately
     window.history.replaceState({}, document.title, location.pathname);
 
     const codeVerifier = window.localStorage.getItem('code_verifier');
-    if (!codeVerifier) {
-        log('AUTHENTICATION', 'Error: Code verifier missing from storage.');
-        return;
-    }
+    if (!codeVerifier) return;
 
     try {
         const response = await fetch("https://accounts.spotify.com/api/token", {
@@ -90,7 +94,6 @@ async function auth_handle_callback() {
             if (data.refresh_token) {
                 window.localStorage.setItem('spotify_refresh_token', data.refresh_token);
             }
-            log('AUTHENTICATION', 'Successfully authenticated via PKCE!');
             window.location.reload();
         } else {
             alert(`Token exchange failed: ${JSON.stringify(data)}`);
@@ -100,7 +103,6 @@ async function auth_handle_callback() {
     }
 }
 
-// Trigger callback listener on load
 window.addEventListener('DOMContentLoaded', () => {
     auth_handle_callback();
 });
