@@ -51,27 +51,32 @@ function auth_get_hash(length) {
     return GENERATE_RANDOM_STRING(length || 16);
 }
 
-// Automatically transition UI from landing/login to the main app dashboard when logged in
+// UI switcher and automatic app starter
 function auth_parse_connection_parameters() {
     if (auth_check_token()) {
-        // Find and hide landing elements/buttons
         const connectBtn = document.getElementById('connect_button');
         if (connectBtn) {
             const landingWrapper = connectBtn.closest('div') || connectBtn.parentElement;
             if (landingWrapper) landingWrapper.style.display = 'none';
         }
 
-        // Hide any elements containing the landing greeting text
         document.querySelectorAll('div, section').forEach(el => {
             if (el.innerText && el.innerText.includes('Please connect your Spotify account')) {
                 el.style.display = 'none';
             }
         });
 
-        // Reveal main app containers and controls
         document.querySelectorAll('#app_container, #main_container, #shuffle_results_container, .container, .row').forEach(el => {
             if (el) el.style.display = '';
         });
+
+        // Automatically trigger main app startup functions if they exist in global scope
+        setTimeout(() => {
+            if (typeof init === 'function') init();
+            else if (typeof start === 'function') start();
+            else if (typeof loadPlaylists === 'function') loadPlaylists();
+            else if (typeof fetchPlaylists === 'function') fetchPlaylists();
+        }, 100);
     }
 }
 
