@@ -51,8 +51,30 @@ function auth_get_hash(length) {
     return GENERATE_RANDOM_STRING(length || 16);
 }
 
+// Direct, bulletproof UI switcher based on your application.css classes
 function auth_parse_connection_parameters() {
-    // Handled natively by main application scripts using auth_check_token()
+    if (auth_check_token()) {
+        // Hide the login/connect container elements
+        document.querySelectorAll('.auth-container').forEach(el => {
+            el.style.display = 'none';
+        });
+
+        // Ensure the main select dropdowns and interactive sections are fully displayed
+        document.querySelectorAll('.page-select, .application-button, .label, .subtitle, #shuffle_results_container').forEach(el => {
+            const containerBox = el.closest('.row') || el.parentElement;
+            if (containerBox) containerBox.style.display = 'block';
+            el.style.display = 'block';
+        });
+
+        // Trigger playlist fetching if a global function exists
+        setTimeout(() => {
+            if (typeof loadPlaylists === 'function') loadPlaylists();
+            else if (typeof fetchPlaylists === 'function') fetchPlaylists();
+            else if (window.spotify && typeof window.spotify.get_playlists === 'function') {
+                window.spotify.get_playlists();
+            }
+        }, 200);
+    }
 }
 
 async function auth_connect_spotify() {
@@ -88,6 +110,7 @@ async function auth_handle_callback() {
         if (urlParams.has('code')) {
             window.history.replaceState({}, document.title, REDIRECT_URI);
         }
+        auth_parse_connection_parameters();
         return;
     }
 
@@ -135,4 +158,5 @@ async function auth_handle_callback() {
 
 window.addEventListener('DOMContentLoaded', () => {
     auth_handle_callback();
+    auth_parse_connection_parameters();
 });
