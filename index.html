@@ -158,7 +158,10 @@
             </div>
 
             <div class="section">
-                <label for="device_select">Choose Active Device</label>
+                <label for="device_select" style="display: flex; justify-content: space-between; align-items: center;">
+                    Choose Active Device 
+                    <span onclick="loadDevices()" style="color: var(--spotify-green); cursor: pointer; font-size: 11px; text-transform: none;">🔄 Refresh</span>
+                </label>
                 <select id="device_select">
                     <option value="">Select a device...</option>
                 </select>
@@ -282,6 +285,36 @@
             return res.json();
         }
 
+        async function loadDevices() {
+            try {
+                const deviceSelect = document.getElementById('device_select');
+                deviceSelect.innerHTML = '<option value="">Select a device...</option>';
+                
+                const devicesData = await callSpotify('/me/player/devices');
+                let foundAndroid = false;
+
+                devicesData.devices.forEach(dev => {
+                    const opt = document.createElement('option');
+                    opt.value = dev.id;
+                    opt.textContent = `${dev.name} (${dev.type})`;
+                    
+                    // Prioritize Android/Smartphone automatically
+                    const isAndroidDevice = dev.type.toLowerCase() === 'smartphone' || dev.name.toLowerCase().includes('android');
+                    
+                    if (isAndroidDevice && !foundAndroid) {
+                        opt.selected = true;
+                        foundAndroid = true;
+                    } else if (dev.is_active && !foundAndroid) {
+                        opt.selected = true;
+                    }
+                    
+                    deviceSelect.appendChild(opt);
+                });
+            } catch (err) {
+                console.error("Failed to load devices:", err);
+            }
+        }
+
         async function loadAppData() {
             try {
                 // Fetch Playlists
@@ -294,16 +327,8 @@
                     playlistSelect.appendChild(opt);
                 });
 
-                // Fetch Devices
-                const devicesData = await callSpotify('/me/player/devices');
-                const deviceSelect = document.getElementById('device_select');
-                devicesData.devices.forEach(dev => {
-                    const opt = document.createElement('option');
-                    opt.value = dev.id;
-                    opt.textContent = `${dev.name} (${dev.type})`;
-                    if (dev.is_active) opt.selected = true;
-                    deviceSelect.appendChild(opt);
-                });
+                // Fetch and auto-select devices
+                await loadDevices();
             } catch (err) {
                 console.error("Failed to load app data:", err);
                 document.getElementById('status').textContent = "Error loading account data. Try reconnecting.";
@@ -323,7 +348,7 @@
             statusEl.textContent = "Fetching playlist tracks...";
 
             try {
-                // Fetch all tracks from playlist (handling pagination if needed)
+                // Fetch all tracks from playlist
                 let tracks = [];
                 let url = `/playlists/${playlistId}/tracks?limit=100`;
                 while (url) {
@@ -346,15 +371,38 @@
 
                 statusEl.textContent = "Starting playback...";
 
-                // Play first batch on device
-                await callSpotify(`/me/player/play${deviceId ? `?device_id=${deviceId}` : ''}`, 'PUT', {
-                    uris: tracks.slice(0, 50) // Send first 50 shuffled tracks
+                // Build play request endpoint with optional device targeting
+                let playEndpoint = '/me/player/play';
+                if (deviceId) {
+                    playEndpoint += `?device_id=${deviceId}`;
+                }
+
+                const res = await fetch(`https://api.spotify.com/v1${playEndpoint}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('spotify_access_token')}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ uris: tracks.slice(0, 50) })
                 });
+
+                if (!res.ok) {
+                    // Fallback to active device if specific device ID fails
+                    const fallbackRes = await fetch(`https://api.spotify.com/v1/me/player/play`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('spotify_access_token')}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ uris: tracks.slice(0, 50) })
+                    });
+                    if (!fallbackRes.ok) throw new Error("Playback failed");
+                }
 
                 statusEl.textContent = "True Shuffle started successfully!";
             } catch (err) {
                 console.error(err);
-                statusEl.textContent = "Playback error. Ensure Spotify is open on your device.";
+                statusEl.textContent = "Error: Open Spotify app or play a track manually first.";
             }
         }
 
