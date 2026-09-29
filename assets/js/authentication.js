@@ -62,9 +62,10 @@ async function auth_connect_spotify() {
         const hashed = await SHA256(codeVerifier);
         const codeChallenge = BASE64_ENCODE(hashed);
 
-        window.localStorage.setItem('code_verifier', codeVerifier);
+        // Use sessionStorage instead of localStorage to survive mobile redirects reliably
+        window.sessionStorage.setItem('code_verifier', codeVerifier);
 
-        const callback_uri = location.origin + location.pathname;
+        const callback_uri = window.location.origin + window.location.pathname;
         const integrity = auth_get_hash(60);
 
         const authUrl = new URL("https://accounts.spotify.com/authorize");
@@ -92,10 +93,14 @@ async function auth_handle_callback() {
 
     if (!code) return;
 
-    window.history.replaceState({}, document.title, location.pathname);
+    // Clean URL immediately so code isn't reused
+    window.history.replaceState({}, document.title, window.location.pathname);
 
-    const codeVerifier = window.localStorage.getItem('code_verifier');
-    if (!codeVerifier) return;
+    const codeVerifier = window.sessionStorage.getItem('code_verifier');
+    if (!codeVerifier) {
+        alert("Error: Code verifier missing from session storage. Mobile browser privacy settings may have blocked it.");
+        return;
+    }
 
     try {
         const response = await fetch("https://accounts.spotify.com/api/token", {
@@ -107,7 +112,7 @@ async function auth_handle_callback() {
                 grant_type: 'authorization_code',
                 client_id: AUTH_CLIENT_ID,
                 code: code,
-                redirect_uri: location.origin + location.pathname,
+                redirect_uri: window.location.origin + window.location.pathname,
                 code_verifier: codeVerifier,
             }),
         });
@@ -118,7 +123,8 @@ async function auth_handle_callback() {
             if (data.refresh_token) {
                 window.localStorage.setItem('spotify_refresh_token', data.refresh_token);
             }
-            window.location.href = location.origin + location.pathname;
+            window.sessionStorage.removeItem('code_verifier');
+            window.location.href = window.location.origin + window.location.pathname;
         } else {
             alert(`Token exchange failed: ${JSON.stringify(data)}`);
         }
