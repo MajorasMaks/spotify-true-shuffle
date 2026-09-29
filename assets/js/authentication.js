@@ -52,24 +52,19 @@ function auth_get_hash(length) {
     return GENERATE_RANDOM_STRING(length || 16);
 }
 
-// Immediate token verification and view setup
+// Clean UI toggle: hides connect view entirely when token is valid
 function auth_parse_connection_parameters() {
+    const authContainer = document.querySelector('.auth-container');
+    
     if (auth_check_token()) {
         const token = auth_get_access_token();
-        console.log("Valid Spotify Token found:", token.substring(0, 8) + "...");
 
-        // Hide only the connect card/button container if it exists
-        const authContainer = document.querySelector('.auth-container');
+        // Completely hide the connect container since we already have a valid token
         if (authContainer) {
             authContainer.style.display = 'none';
         }
 
-        // Ensure the page container and main elements are explicitly visible
-        document.querySelectorAll('.page-container, .container, #app, main').forEach(el => {
-            el.style.display = 'block';
-        });
-
-        // Feed the token to any global spotify instance or constants
+        // Inject the token into the global Spotify instance if it exists
         if (window.spotify) {
             if (typeof window.spotify.init === 'function') {
                 window.spotify.init(token);
@@ -78,7 +73,7 @@ function auth_parse_connection_parameters() {
             }
         }
 
-        // Trigger playlist retrieval functions
+        // Trigger playlist loading functions
         setTimeout(() => {
             if (typeof loadPlaylists === 'function') loadPlaylists();
             else if (typeof fetchPlaylists === 'function') fetchPlaylists();
@@ -87,9 +82,7 @@ function auth_parse_connection_parameters() {
             }
         }, 100);
     } else {
-        console.log("No valid token found. Showing connect interface.");
-        // Ensure auth container is visible if no token exists
-        const authContainer = document.querySelector('.auth-container');
+        // If no token, make sure connect container is visible
         if (authContainer) {
             authContainer.style.display = 'block';
         }
@@ -138,10 +131,7 @@ async function auth_handle_callback() {
     if (!code) return;
 
     const codeVerifier = window.localStorage.getItem('code_verifier');
-    if (!codeVerifier) {
-        alert("Missing code verifier in storage. Please try connecting again.");
-        return;
-    }
+    if (!codeVerifier) return;
 
     window.localStorage.removeItem('code_verifier');
 
