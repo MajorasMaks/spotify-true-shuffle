@@ -1,4 +1,4 @@
-// Permanent direct-authentication configuration for your account
+// PKCE Authentication helper functions
 const AUTH_CLIENT_ID = '9e09bf13b9e640d8b7d94b58ad885484';
 const AUTH_APPLICATION_SCOPES = [
     'playlist-modify-public',
@@ -12,6 +12,25 @@ const AUTH_APPLICATION_SCOPES = [
 
 const REDIRECT_URI = 'https://spotify-true-shuffle.vercel.app/';
 
+const GENERATE_RANDOM_STRING = (length) => {
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const values = crypto.getRandomValues(new Uint8Array(length));
+    return values.reduce((acc, x) => acc + possible[x % possible.length], '');
+};
+
+const SHA256 = async (plain) => {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(plain);
+    return window.crypto.subtle.digest('SHA-256', data);
+};
+
+const BASE64_ENCODE = (input) => {
+    return btoa(String.fromCharCode(...new Uint8Array(input)))
+        .replace(/=/g, '')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_');
+};
+
 function auth_get_access_token() {
     return window.localStorage.getItem('spotify_access_token');
 }
@@ -22,69 +41,44 @@ function auth_get_token() {
 
 function auth_check_token() {
     const token = window.localStorage.getItem('spotify_access_token');
-    return token && token !== 'undefined' && token !== 'null';
+    return !!token && token !== 'undefined' && token !== 'null';
 }
 
 function auth_has_recently_connected() {
-    return true;
+    return !!window.localStorage.getItem('spotify_refresh_token');
 }
 
 function auth_get_hash(length) {
-    return '1234567890abcdef';
+    return GENERATE_RANDOM_STRING(length || 16);
 }
 
-// Safely clear the connect UI contents without collapsing layout wrappers
 function auth_parse_connection_parameters() {
-    const authContainer = document.querySelector('.auth-container');
-    if (authContainer && auth_check_token()) {
-        // Clear out the connect button/text cleanly without hiding the element layout
-        authContainer.innerHTML = '';
-    }
-
-    const token = auth_get_access_token();
-    if (token && window.spotify) {
-        if (typeof window.spotify.init === 'function') {
-            window.spotify.init(token);
-        } else if (window.spotify._constants) {
-            window.spotify._constants.TOKEN = token;
-        }
-    }
-
-    // Fire playlist loading immediately
-    setTimeout(() => {
-        if (typeof loadPlaylists === 'function') loadPlaylists();
-        else if (typeof fetchPlaylists === 'function') fetchPlaylists();
-        else if (window.spotify && typeof window.spotify.get_playlists === 'function') {
-            window.spotify.get_playlists();
-        }
-    }, 100);
+    // Let your main application scripts handle UI transitions natively
 }
 
-// Fallback PKCE flow if token needs renewal or initial login
 async function auth_connect_spotify() {
-    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    const codeVerifier = Array.from(crypto.getRandomValues(new Uint8Array(64)))
-        .map(x => possible[x % possible.length]).join('');
-    
-    const encoder = new TextEncoder();
-    const hashed = await window.crypto.subtle.digest('SHA-256', encoder.encode(codeVerifier));
-    const codeChallenge = btoa(String.fromCharCode(...new Uint8Array(hashed)))
-        .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+    try {
+        const codeVerifier = GENERATE_RANDOM_STRING(64);
+        const hashed = await SHA256(codeVerifier);
+        const codeChallenge = BASE64_ENCODE(hashed);
 
-    window.localStorage.setItem('code_verifier', codeVerifier);
+        window.localStorage.setItem('code_verifier', codeVerifier);
 
-    const authUrl = new URL("https://accounts.spotify.com/authorize");
-    authUrl.search = new URLSearchParams({
-        response_type: 'code',
-        client_id: AUTH_CLIENT_ID,
-        scope: AUTH_APPLICATION_SCOPES,
-        code_challenge_method: 'S256',
-        code_challenge: codeChallenge,
-        redirect_uri: REDIRECT_URI,
-        state: 'auth_direct'
-    }).toString();
+        const authUrl = new URL("https://accounts.spotify.com/authorize");
+        authUrl.search = new URLSearchParams({
+            response_type: 'code',
+            client_id: AUTH_CLIENT_ID,
+            scope: AUTH_APPLICATION_SCOPES,
+            code_challenge_method: 'S256',
+            code_challenge: codeChallenge,
+            redirect_uri: REDIRECT_URI,
+            state: auth_get_hash(16)
+        }).toString();
 
-    window.location.href = authUrl.toString();
+        window.location.href = authUrl.toString();
+    } catch (err) {
+        console.error("Auth error:", err);
+    }
 }
 
 async function auth_handle_callback() {
@@ -119,11 +113,10 @@ async function auth_handle_callback() {
             window.location.href = REDIRECT_URI;
         }
     } catch (err) {
-        console.error("Token error:", err);
+        console.error("Token exchange error:", err);
     }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
     auth_handle_callback();
-    auth_parse_connection_parameters();
 });
