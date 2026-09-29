@@ -51,38 +51,8 @@ function auth_get_hash(length) {
     return GENERATE_RANDOM_STRING(length || 16);
 }
 
-// Robust UI switcher that targets classes defined in application.css
 function auth_parse_connection_parameters() {
-    if (auth_check_token()) {
-        // Hide auth containers
-        document.querySelectorAll('.auth-container').forEach(el => {
-            el.style.display = 'none';
-        });
-
-        // Ensure main app containers or hidden interactive dropdown sections are visible
-        document.querySelectorAll('.page-select, .application-button, .label, .subtitle').forEach(el => {
-            const parent = el.closest('div');
-            if (parent) parent.style.display = '';
-        });
-
-        // Initialize Spotify token context and trigger playlist loaders
-        const token = auth_get_access_token();
-        if (window.spotify && typeof window.spotify.init === 'function') {
-            window.spotify.init(token);
-        } else if (window.spotify && window.spotify._constants) {
-            window.spotify._constants.TOKEN = token;
-        }
-
-        setTimeout(() => {
-            if (typeof init === 'function') init();
-            else if (typeof start === 'function') start();
-            else if (typeof loadPlaylists === 'function') loadPlaylists();
-            else if (typeof fetchPlaylists === 'function') fetchPlaylists();
-            else if (window.spotify && typeof window.spotify.get_playlists === 'function') {
-                window.spotify.get_playlists();
-            }
-        }, 150);
-    }
+    // Left native for main.js handling, token presence checked globally via auth_check_token
 }
 
 async function auth_connect_spotify() {
@@ -118,7 +88,6 @@ async function auth_handle_callback() {
         if (urlParams.has('code')) {
             window.history.replaceState({}, document.title, REDIRECT_URI);
         }
-        auth_parse_connection_parameters();
         return;
     }
 
@@ -166,5 +135,4 @@ async function auth_handle_callback() {
 
 window.addEventListener('DOMContentLoaded', () => {
     auth_handle_callback();
-    auth_parse_connection_parameters();
 });
