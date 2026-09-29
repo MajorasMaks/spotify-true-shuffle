@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
-// Replace with your credentials or env variables
 const CLIENT_ID = '9e09bf13b9e640d8b7d94b58ad885484';
-const REDIRECT_URI = typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:8080';
+const REDIRECT_URI = 'https://spotify-true-shuffle.vercel.app/';
 const SCOPES = 'playlist-read-private playlist-read-collaborative user-modify-playback-state user-read-playback-state';
 
 export default function TrueShuffleApp() {
@@ -10,7 +9,6 @@ export default function TrueShuffleApp() {
   const [playlists, setPlaylists] = useState([]);
   const [status, setStatus] = useState('Please log in with Spotify');
 
-  // Handle PKCE / Token Auth flow on load
   useEffect(() => {
     const hash = window.location.hash;
     let tokenData = window.localStorage.getItem('spotify_token');
@@ -57,7 +55,6 @@ export default function TrueShuffleApp() {
       let tracks = [];
       let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`;
 
-      // Pagination loop
       while (url) {
         const res = await fetch(url, {
           headers: { Authorization: `Bearer ${token}` }
@@ -68,7 +65,7 @@ export default function TrueShuffleApp() {
           data.items.forEach(item => {
             const track = item.track || item.item;
             if (track && track.uri) {
-              tracks.append ? tracks.append(track.uri) : tracks.push(track.uri);
+              tracks.push(track.uri);
             }
           });
         }
@@ -88,7 +85,7 @@ export default function TrueShuffleApp() {
         [tracks[i], tracks[j]] = [tracks[j], tracks[i]];
       }
 
-      // Filter out local files so API doesn't throw a 400 error
+      // Filter out local files to prevent API 400 bad request errors
       const playableTracks = tracks.filter(uri => !uri.startsWith('spotify:local:'));
 
       setStatus('Sending shuffled queue to your device...');
@@ -119,7 +116,7 @@ export default function TrueShuffleApp() {
       <p>{status}</p>
 
       {!token ? (
-        <button onClick={login} style={{ padding: '10px 20px', fontSize: '16px' }}>
+        <button onClick={login} style={{ padding: '10px 20px', fontSize: '16px', cursor: 'pointer' }}>
           Log in with Spotify
         </button>
       ) : (
