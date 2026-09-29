@@ -51,29 +51,33 @@ function auth_get_hash(length) {
     return GENERATE_RANDOM_STRING(length || 16);
 }
 
-// Direct, bulletproof UI switcher based on your application.css classes
+// Clean UI toggle that only hides the auth card without breaking layout containers
 function auth_parse_connection_parameters() {
     if (auth_check_token()) {
-        // Hide the login/connect container elements
+        const token = auth_get_access_token();
+
+        // Safely hide only the authentication container if present
         document.querySelectorAll('.auth-container').forEach(el => {
             el.style.display = 'none';
         });
 
-        // Ensure the main select dropdowns and interactive sections are fully displayed
-        document.querySelectorAll('.page-select, .application-button, .label, .subtitle, #shuffle_results_container').forEach(el => {
-            const containerBox = el.closest('.row') || el.parentElement;
-            if (containerBox) containerBox.style.display = 'block';
-            el.style.display = 'block';
-        });
+        // Inject token into any global Spotify instance if available
+        if (window.spotify) {
+            if (typeof window.spotify.init === 'function') {
+                window.spotify.init(token);
+            } else if (window.spotify._constants) {
+                window.spotify._constants.TOKEN = token;
+            }
+        }
 
-        // Trigger playlist fetching if a global function exists
+        // Trigger playlist loaders safely after a brief DOM settling delay
         setTimeout(() => {
             if (typeof loadPlaylists === 'function') loadPlaylists();
             else if (typeof fetchPlaylists === 'function') fetchPlaylists();
             else if (window.spotify && typeof window.spotify.get_playlists === 'function') {
                 window.spotify.get_playlists();
             }
-        }, 200);
+        }, 150);
     }
 }
 
